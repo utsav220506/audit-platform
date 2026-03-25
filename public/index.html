@@ -1,0 +1,1247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AuditDoc — Immutable Document Platform</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.development.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.development.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <style>
+    :root {
+      --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--border:#30363d;
+      --text:#e6edf3;--muted:#8b949e;--gold:#f0a500;--gold-dim:rgba(240,165,0,0.12);
+      --teal:#2dd4bf;--red:#f85149;--green:#3fb950;--blue:#58a6ff;--purple:#bc8cff;
+      --ff-display:'Playfair Display',Georgia,serif;
+      --ff-mono:'IBM Plex Mono',monospace;
+      --ff-body:'DM Sans',sans-serif;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html,body,#root{height:100%}
+    body{background:var(--bg);color:var(--text);font-family:var(--ff-body);font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased}
+    ::-webkit-scrollbar{width:6px;height:6px}
+    ::-webkit-scrollbar-track{background:var(--bg)}
+    ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+    ::selection{background:var(--gold-dim);color:var(--gold)}
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+<script type="text/babel">
+/* ──────────────────────────────────────────────────────
+   AuditDoc Platform — Full React SPA
+   app.jsx  (loaded by Babel Standalone from index.html)
+   ────────────────────────────────────────────────────── */
+'use strict';
+
+const { useState, useEffect, useCallback, useRef } = React;
+
+// ── API Helper ────────────────────────────────────────
+async function api(path, opts = {}, token = null) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const res = await fetch(path, {
+    ...opts,
+    headers: { ...headers, ...(opts.headers || {}) },
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Request failed');
+  return data;
+}
+
+// ── Shared Styles (injected once) ─────────────────────
+const CSS = `
+  .layout { display: flex; height: 100vh; overflow: hidden; }
+
+  /* Sidebar */
+  .sidebar {
+    width: 220px; min-width: 220px; background: var(--bg2);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    padding: 0; overflow-y: auto;
+  }
+  .sidebar-brand {
+    padding: 20px 20px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .sidebar-brand h1 {
+    font-family: var(--ff-display);
+    font-size: 18px; font-weight: 700; color: var(--gold);
+    letter-spacing: -0.3px;
+  }
+  .sidebar-brand p { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .sidebar-nav { flex: 1; padding: 12px 0; }
+  .nav-section-label {
+    font-size: 10px; font-weight: 600; letter-spacing: 1px;
+    color: var(--muted); padding: 8px 20px 4px; text-transform: uppercase;
+  }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 20px; cursor: pointer; border-radius: 0;
+    color: var(--muted); font-size: 13px; font-weight: 400;
+    transition: all 0.15s; border-left: 2px solid transparent;
+  }
+  .nav-item:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+  .nav-item.active {
+    color: var(--gold); background: var(--gold-dim);
+    border-left-color: var(--gold);
+  }
+  .nav-icon { width: 16px; text-align: center; flex-shrink: 0; }
+  .sidebar-footer {
+    padding: 16px 20px; border-top: 1px solid var(--border);
+  }
+  .user-card {
+    display: flex; align-items: center; gap: 10px;
+  }
+  .user-avatar {
+    width: 30px; height: 30px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; flex-shrink: 0;
+  }
+  .user-info { flex: 1; min-width: 0; }
+  .user-name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .user-role { font-size: 10px; color: var(--muted); }
+  .btn-logout {
+    background: none; border: none; color: var(--muted); cursor: pointer;
+    font-size: 12px; padding: 4px 6px; border-radius: 4px;
+    transition: all 0.15s;
+  }
+  .btn-logout:hover { color: var(--red); background: rgba(248,81,73,0.1); }
+
+  /* Main content */
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .topbar {
+    padding: 14px 28px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--bg2); flex-shrink: 0;
+  }
+  .topbar-title { font-family: var(--ff-display); font-size: 20px; font-weight: 600; }
+  .topbar-sub { font-size: 12px; color: var(--muted); margin-top: 1px; }
+  .content { flex: 1; overflow-y: auto; padding: 24px 28px; }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 14px; border-radius: 6px; border: 1px solid transparent;
+    font-family: var(--ff-body); font-size: 13px; font-weight: 500;
+    cursor: pointer; transition: all 0.15s; white-space: nowrap;
+  }
+  .btn-primary { background: var(--gold); color: #0d0d00; border-color: var(--gold); }
+  .btn-primary:hover { background: #d49200; border-color: #d49200; }
+  .btn-secondary { background: transparent; color: var(--text); border-color: var(--border); }
+  .btn-secondary:hover { background: var(--bg3); }
+  .btn-danger { background: transparent; color: var(--red); border-color: rgba(248,81,73,0.4); }
+  .btn-danger:hover { background: rgba(248,81,73,0.1); }
+  .btn-ghost { background: transparent; color: var(--muted); border-color: transparent; }
+  .btn-ghost:hover { color: var(--text); background: var(--bg3); }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* Cards */
+  .card {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 20px;
+  }
+  .card-sm { padding: 14px 16px; }
+
+  /* Doc list */
+  .doc-grid { display: flex; flex-direction: column; gap: 8px; }
+  .doc-item {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 16px 20px;
+    display: flex; align-items: center; gap: 16px;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .doc-item:hover { border-color: var(--gold); background: var(--bg3); }
+  .doc-icon {
+    width: 36px; height: 36px; border-radius: 8px;
+    background: var(--gold-dim); display: flex; align-items: center;
+    justify-content: center; font-size: 16px; flex-shrink: 0;
+  }
+  .doc-info { flex: 1; min-width: 0; }
+  .doc-title { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .doc-meta { font-size: 12px; color: var(--muted); margin-top: 2px; display: flex; gap: 12px; flex-wrap: wrap; }
+  .doc-meta span { display: flex; align-items: center; gap: 4px; }
+  .doc-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+  /* Version badge */
+  .ver-badge {
+    font-family: var(--ff-mono); font-size: 11px; font-weight: 500;
+    padding: 2px 7px; border-radius: 4px;
+    background: rgba(45,212,191,0.12); color: var(--teal);
+    border: 1px solid rgba(45,212,191,0.25);
+  }
+
+  /* Role badge */
+  .role-badge {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.5px;
+    padding: 2px 8px; border-radius: 4px; text-transform: uppercase;
+  }
+  .role-STUDENT  { background: rgba(88,166,255,0.15); color: var(--blue); }
+  .role-TEACHER  { background: rgba(63,185,80,0.15);  color: var(--green); }
+  .role-HOD      { background: rgba(188,140,255,0.15); color: var(--purple); }
+
+  /* Forms */
+  .form-group { margin-bottom: 16px; }
+  .form-label { font-size: 12px; font-weight: 600; color: var(--muted); display: block; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .form-input, .form-select, .form-textarea {
+    width: 100%; background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 6px; padding: 9px 12px; color: var(--text);
+    font-family: var(--ff-body); font-size: 14px;
+    transition: border-color 0.15s; outline: none;
+  }
+  .form-input:focus, .form-select:focus, .form-textarea:focus {
+    border-color: var(--gold);
+  }
+  .form-textarea { resize: vertical; min-height: 200px; font-family: var(--ff-mono); font-size: 13px; line-height: 1.7; }
+  .form-select option { background: var(--bg3); }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1000; backdrop-filter: blur(2px);
+    animation: fadeIn 0.15s ease;
+  }
+  .modal {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 10px; width: 90%; max-width: 560px; max-height: 90vh;
+    overflow-y: auto; animation: slideUp 0.2s ease;
+  }
+  .modal-header {
+    padding: 20px 24px 16px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .modal-title { font-family: var(--ff-display); font-size: 17px; font-weight: 600; }
+  .modal-body { padding: 20px 24px; }
+  .modal-footer {
+    padding: 14px 24px; border-top: 1px solid var(--border);
+    display: flex; justify-content: flex-end; gap: 8px;
+  }
+
+  /* Toast */
+  .toast-container {
+    position: fixed; top: 20px; right: 20px; z-index: 2000;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .toast {
+    padding: 10px 16px; border-radius: 8px; font-size: 13px; font-weight: 500;
+    display: flex; align-items: center; gap: 10px; min-width: 260px; max-width: 380px;
+    border: 1px solid; animation: slideLeft 0.25s ease;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+  .toast.success { background: rgba(63,185,80,0.15); border-color: rgba(63,185,80,0.3); color: var(--green); }
+  .toast.error   { background: rgba(248,81,73,0.15); border-color: rgba(248,81,73,0.3); color: var(--red); }
+  .toast.info    { background: rgba(240,165,0,0.12); border-color: rgba(240,165,0,0.25); color: var(--gold); }
+
+  /* Diff viewer */
+  .diff-line {
+    font-family: var(--ff-mono); font-size: 12px; padding: 2px 10px 2px 30px;
+    position: relative; line-height: 1.6; white-space: pre-wrap; word-break: break-all;
+  }
+  .diff-line.added    { background: rgba(63,185,80,0.1);  color: var(--green); }
+  .diff-line.removed  { background: rgba(248,81,73,0.1);  color: var(--red); }
+  .diff-line.unchanged{ color: var(--muted); }
+  .diff-line::before {
+    position: absolute; left: 10px; font-weight: 700;
+  }
+  .diff-line.added::before    { content: '+'; color: var(--green); }
+  .diff-line.removed::before  { content: '−'; color: var(--red); }
+  .diff-line.unchanged::before{ content: ' '; }
+  .diff-stats {
+    display: flex; gap: 12px; font-size: 12px; margin-bottom: 12px;
+  }
+  .diff-stat-added   { color: var(--green); }
+  .diff-stat-removed { color: var(--red); }
+  .diff-stat-same    { color: var(--muted); }
+
+  /* Version timeline */
+  .timeline { position: relative; padding-left: 28px; }
+  .timeline::before {
+    content: ''; position: absolute; left: 7px; top: 6px; bottom: 6px;
+    width: 2px; background: var(--border);
+  }
+  .timeline-item { position: relative; margin-bottom: 16px; }
+  .timeline-dot {
+    position: absolute; left: -24px; top: 6px;
+    width: 12px; height: 12px; border-radius: 50%;
+    border: 2px solid var(--bg2); z-index: 1;
+  }
+  .timeline-dot.latest { background: var(--gold); border-color: var(--gold-dim); }
+  .timeline-dot.old    { background: var(--border); }
+  .timeline-card {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 16px; transition: border-color 0.15s;
+  }
+  .timeline-card:hover { border-color: var(--border); }
+  .timeline-card.latest { border-color: rgba(240,165,0,0.3); }
+  .timeline-meta { font-size: 11px; color: var(--muted); display: flex; gap: 12px; flex-wrap: wrap; margin-top: 6px; }
+  .hash-text {
+    font-family: var(--ff-mono); font-size: 11px; color: var(--muted);
+    letter-spacing: 0.3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  /* Stats bar */
+  .stats-bar { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+  .stat-card {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 16px 20px; flex: 1; min-width: 140px;
+  }
+  .stat-value { font-family: var(--ff-display); font-size: 28px; font-weight: 700; }
+  .stat-label { font-size: 11px; color: var(--muted); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* Audit log table */
+  .audit-table { width: 100%; border-collapse: collapse; }
+  .audit-table th {
+    text-align: left; font-size: 11px; font-weight: 600; color: var(--muted);
+    padding: 8px 12px; text-transform: uppercase; letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border);
+  }
+  .audit-table td { padding: 10px 12px; border-bottom: 1px solid rgba(48,54,61,0.5); font-size: 13px; }
+  .audit-table tr:last-child td { border-bottom: none; }
+  .audit-table tr:hover td { background: rgba(255,255,255,0.02); }
+  .action-badge {
+    font-family: var(--ff-mono); font-size: 10px; font-weight: 500;
+    padding: 2px 7px; border-radius: 4px; white-space: nowrap;
+  }
+  .action-CREATE_DOC   { background: rgba(63,185,80,0.15);  color: var(--green); }
+  .action-EDIT_DOC     { background: rgba(240,165,0,0.12);  color: var(--gold); }
+  .action-VIEW_DOC     { background: rgba(88,166,255,0.12); color: var(--blue); }
+  .action-GENERATE_REPORT { background: rgba(188,140,255,0.12); color: var(--purple); }
+  .action-SHARE_DATA   { background: rgba(45,212,191,0.12); color: var(--teal); }
+
+  /* Auth page */
+  .auth-page {
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+    background: radial-gradient(ellipse 80% 60% at 50% -20%, rgba(240,165,0,0.08), transparent);
+  }
+  .auth-box {
+    width: 100%; max-width: 400px;
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 12px; padding: 36px;
+  }
+  .auth-logo {
+    font-family: var(--ff-display); font-size: 26px; font-weight: 700;
+    color: var(--gold); text-align: center; margin-bottom: 4px;
+  }
+  .auth-tagline { text-align: center; color: var(--muted); font-size: 13px; margin-bottom: 28px; }
+  .auth-tabs { display: flex; gap: 0; margin-bottom: 24px; border-bottom: 1px solid var(--border); }
+  .auth-tab {
+    flex: 1; padding: 10px; text-align: center; cursor: pointer; font-size: 13px;
+    font-weight: 500; color: var(--muted); border-bottom: 2px solid transparent;
+    margin-bottom: -1px; transition: all 0.15s; background: none; border-top: none; border-left: none; border-right: none;
+  }
+  .auth-tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+  .auth-switch { text-align: center; margin-top: 16px; font-size: 13px; color: var(--muted); }
+  .auth-switch button { background: none; border: none; color: var(--gold); cursor: pointer; font-size: 13px; }
+
+  /* Misc */
+  .empty-state {
+    text-align: center; padding: 60px 20px; color: var(--muted);
+  }
+  .empty-state .empty-icon { font-size: 40px; margin-bottom: 12px; }
+  .empty-state h3 { font-family: var(--ff-display); font-size: 18px; color: var(--text); margin-bottom: 6px; }
+  .section-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 16px; flex-wrap: wrap; gap: 10px;
+  }
+  .section-title { font-family: var(--ff-display); font-size: 16px; font-weight: 600; }
+  .filter-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .search-input {
+    background: var(--bg3); border: 1px solid var(--border); border-radius: 6px;
+    padding: 7px 12px; color: var(--text); font-family: var(--ff-body); font-size: 13px;
+    outline: none; transition: border-color 0.15s;
+  }
+  .search-input:focus { border-color: var(--gold); }
+  .editor-wrap { display: flex; gap: 16px; flex-direction: column; }
+  .editor-toolbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px; background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 8px 8px 0 0; border-bottom: none; flex-wrap: wrap; gap: 8px;
+  }
+  .editor-area {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 0 0 8px 8px; overflow: hidden;
+  }
+  .editor-area textarea {
+    width: 100%; background: transparent; border: none; outline: none;
+    color: var(--text); font-family: var(--ff-mono); font-size: 13px;
+    line-height: 1.8; padding: 16px; min-height: 400px; resize: none;
+  }
+  .divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+  .text-muted { color: var(--muted); }
+  .text-gold { color: var(--gold); }
+  .flex-between { display: flex; align-items: center; justify-content: space-between; }
+  .flex-gap { display: flex; align-items: center; gap: 8px; }
+  .mt-1 { margin-top: 4px; }
+  .mt-2 { margin-top: 8px; }
+  .mt-3 { margin-top: 12px; }
+  .mb-3 { margin-bottom: 12px; }
+  .w-full { width: 100%; }
+  @keyframes fadeIn  { from { opacity: 0 } to { opacity: 1 } }
+  @keyframes slideUp { from { opacity: 0; transform: translateY(16px) } to { opacity: 1; transform: none } }
+  @keyframes slideLeft { from { opacity: 0; transform: translateX(20px) } to { opacity: 1; transform: none } }
+`;
+
+// Inject styles
+if (!document.getElementById('app-styles')) {
+  const s = document.createElement('style');
+  s.id = 'app-styles'; s.textContent = CSS;
+  document.head.appendChild(s);
+}
+
+// ── Toast ──────────────────────────────────────────────
+function Toast({ toasts }) {
+  return (
+    <div className="toast-container">
+      {toasts.map(t => (
+        <div key={t.id} className={`toast ${t.type}`}>
+          <span>{t.type === 'success' ? '✓' : t.type === 'error' ? '✕' : 'ℹ'}</span>
+          {t.message}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function useToast() {
+  const [toasts, setToasts] = useState([]);
+  const show = useCallback((message, type = 'info') => {
+    const id = Date.now();
+    setToasts(t => [...t, { id, message, type }]);
+    setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 3000);
+  }, []);
+  return { toasts, show };
+}
+
+// ── Role helpers ───────────────────────────────────────
+const ROLE_COLOR = { STUDENT: '#58a6ff', TEACHER: '#3fb950', HOD: '#bc8cff' };
+function RoleBadge({ role }) {
+  return <span className={`role-badge role-${role}`}>{role}</span>;
+}
+function avatarStyle(role) {
+  return { background: `${ROLE_COLOR[role]}22`, color: ROLE_COLOR[role] };
+}
+function initials(name) {
+  return name?.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || '?';
+}
+function fmtDate(d) {
+  if (!d) return '—';
+  return new Date(d.endsWith('Z') ? d : d + 'Z').toLocaleString(undefined, {
+    month: 'short', day: 'numeric', year: 'numeric',
+    hour: '2-digit', minute: '2-digit'
+  });
+}
+
+// ── Modal ──────────────────────────────────────────────
+function Modal({ title, onClose, children, footer }) {
+  useEffect(() => {
+    const handler = e => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal">
+        <div className="modal-header">
+          <span className="modal-title">{title}</span>
+          <button className="btn btn-ghost btn-sm" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">{children}</div>
+        {footer && <div className="modal-footer">{footer}</div>}
+      </div>
+    </div>
+  );
+}
+
+// ── Auth Page ──────────────────────────────────────────
+function AuthPage({ onLogin }) {
+  const [tab, setTab] = useState('login');
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'STUDENT' });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
+
+  async function submit(e) {
+    e.preventDefault(); setError(''); setLoading(true);
+    try {
+      const path = tab === 'login' ? '/auth/login' : '/auth/register';
+      const body = tab === 'login'
+        ? { email: form.email, password: form.password }
+        : { name: form.name, email: form.email, password: form.password, role: form.role };
+      const data = await api(path, { method: 'POST', body });
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+      onLogin(data.user, data.token);
+    } catch (e) { setError(e.message); } finally { setLoading(false); }
+  }
+
+  return (
+    <div className="auth-page">
+      <div className="auth-box">
+        <div className="auth-logo">⬛ AuditDoc</div>
+        <div className="auth-tagline">Immutable documents · Full audit trail · Role-based access</div>
+
+        <div className="auth-tabs">
+          {['login','register'].map(t => (
+            <button key={t} className={`auth-tab ${tab === t ? 'active' : ''}`} onClick={() => { setTab(t); setError(''); }}>
+              {t === 'login' ? 'Sign In' : 'Create Account'}
+            </button>
+          ))}
+        </div>
+
+        <form onSubmit={submit}>
+          {tab === 'register' && (
+            <div className="form-group">
+              <label className="form-label">Full Name</label>
+              <input className="form-input" placeholder="Your name" value={form.name} onChange={set('name')} required />
+            </div>
+          )}
+          <div className="form-group">
+            <label className="form-label">Email</label>
+            <input className="form-input" type="email" placeholder="you@example.com" value={form.email} onChange={set('email')} required />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Password</label>
+            <input className="form-input" type="password" placeholder={tab === 'register' ? 'Min. 6 characters' : '••••••••'} value={form.password} onChange={set('password')} required />
+          </div>
+          {tab === 'register' && (
+            <div className="form-group">
+              <label className="form-label">Role</label>
+              <select className="form-select" value={form.role} onChange={set('role')}>
+                <option value="STUDENT">Student — Create &amp; edit own documents</option>
+                <option value="TEACHER">Teacher — Manage all documents, reports</option>
+                <option value="HOD">HOD — Read-only admin, reports</option>
+              </select>
+            </div>
+          )}
+          {error && <div style={{ color: 'var(--red)', fontSize: 13, marginBottom: 12 }}>⚠ {error}</div>}
+          <button className="btn btn-primary w-full" disabled={loading}>
+            {loading ? 'Please wait…' : tab === 'login' ? 'Sign In' : 'Create Account'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Sidebar ────────────────────────────────────────────
+function Sidebar({ user, page, setPage, onLogout }) {
+  const navItems = [
+    { id: 'dashboard', icon: '⊞', label: 'Dashboard', roles: ['STUDENT','TEACHER','HOD'] },
+    { id: 'editor',    icon: '✎', label: 'New Document', roles: ['STUDENT','TEACHER'] },
+    { id: 'reports',   icon: '◈', label: 'Reports', roles: ['TEACHER','HOD'] },
+    { id: 'audit',     icon: '◎', label: 'Audit Logs', roles: ['TEACHER','HOD'] },
+  ];
+  const visible = navItems.filter(n => n.roles.includes(user.role));
+  return (
+    <div className="sidebar">
+      <div className="sidebar-brand">
+        <h1>⬛ AuditDoc</h1>
+        <p>Immutable Document Platform</p>
+      </div>
+      <nav className="sidebar-nav">
+        <div className="nav-section-label">Navigation</div>
+        {visible.map(n => (
+          <div key={n.id} className={`nav-item ${page === n.id ? 'active' : ''}`} onClick={() => setPage(n.id)}>
+            <span className="nav-icon">{n.icon}</span>
+            {n.label}
+          </div>
+        ))}
+      </nav>
+      <div className="sidebar-footer">
+        <div className="user-card">
+          <div className="user-avatar" style={avatarStyle(user.role)}>{initials(user.name)}</div>
+          <div className="user-info">
+            <div className="user-name">{user.name}</div>
+            <div className="user-role"><RoleBadge role={user.role} /></div>
+          </div>
+          <button className="btn-logout" title="Sign out" onClick={onLogout}>⏏</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Dashboard ──────────────────────────────────────────
+function Dashboard({ user, token, toast, setPage, setEditDoc }) {
+  const [docs, setDocs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [showCreate, setShowCreate] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newContent, setNewContent] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [shareModal, setShareModal] = useState(null);
+
+  async function load() {
+    try {
+      const data = await api('/documents', {}, token);
+      setDocs(data);
+    } catch (e) { toast.show(e.message, 'error'); }
+    finally { setLoading(false); }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  async function createDoc(e) {
+    e.preventDefault(); setCreating(true);
+    try {
+      await api('/documents', { method: 'POST', body: { title: newTitle, content: newContent } }, token);
+      toast.show('Document created', 'success');
+      setShowCreate(false); setNewTitle(''); setNewContent('');
+      load();
+    } catch (e) { toast.show(e.message, 'error'); } finally { setCreating(false); }
+  }
+
+  const filtered = docs.filter(d =>
+    d.title.toLowerCase().includes(search.toLowerCase()) ||
+    d.author?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const canCreate = user.role !== 'HOD';
+
+  return (
+    <div>
+      {/* Stats */}
+      <div className="stats-bar">
+        <div className="stat-card">
+          <div className="stat-value text-gold">{docs.length}</div>
+          <div className="stat-label">Total Documents</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-value" style={{ color: 'var(--teal)' }}>
+            {docs.reduce((s, d) => s + (d.latest_version || 1), 0)}
+          </div>
+          <div className="stat-label">Total Versions</div>
+        </div>
+        {user.role !== 'STUDENT' && (
+          <div className="stat-card">
+            <div className="stat-value" style={{ color: 'var(--purple)' }}>
+              {[...new Set(docs.map(d => d.created_by))].length}
+            </div>
+            <div className="stat-label">Contributors</div>
+          </div>
+        )}
+        <div className="stat-card">
+          <div className="stat-value" style={{ color: 'var(--green)' }}>
+            {user.role.charAt(0) + user.role.slice(1).toLowerCase()}
+          </div>
+          <div className="stat-label">Your Role</div>
+        </div>
+      </div>
+
+      <div className="section-header">
+        <span className="section-title">Documents</span>
+        <div className="flex-gap">
+          <input className="search-input" placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)} />
+          {canCreate && (
+            <button className="btn btn-primary" onClick={() => setShowCreate(true)}>+ New Document</button>
+          )}
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="empty-state"><div className="empty-icon">⋯</div><p>Loading…</p></div>
+      ) : filtered.length === 0 ? (
+        <div className="empty-state">
+          <div className="empty-icon">📄</div>
+          <h3>{search ? 'No results' : 'No documents yet'}</h3>
+          <p>{canCreate ? 'Create your first document to get started.' : 'No documents to display.'}</p>
+        </div>
+      ) : (
+        <div className="doc-grid">
+          {filtered.map(doc => (
+            <div key={doc.document_id} className="doc-item" onClick={() => { setEditDoc(doc); setPage('editor'); }}>
+              <div className="doc-icon">📄</div>
+              <div className="doc-info">
+                <div className="doc-title">{doc.title}</div>
+                <div className="doc-meta">
+                  {user.role !== 'STUDENT' && <span>👤 {doc.author}</span>}
+                  <span>🕐 {fmtDate(doc.last_modified)}</span>
+                  <span className="ver-badge">v{doc.latest_version || 1}</span>
+                </div>
+              </div>
+              <div className="doc-actions" onClick={e => e.stopPropagation()}>
+                {['TEACHER','HOD'].includes(user.role) && (
+                  <button className="btn btn-ghost btn-sm" onClick={() => setShareModal(doc)} title="Share">⇧</button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Create modal */}
+      {showCreate && (
+        <Modal title="Create New Document" onClose={() => setShowCreate(false)}
+          footer={<>
+            <button className="btn btn-secondary" onClick={() => setShowCreate(false)}>Cancel</button>
+            <button className="btn btn-primary" onClick={createDoc} disabled={creating || !newTitle.trim()}>
+              {creating ? 'Creating…' : 'Create Document'}
+            </button>
+          </>}>
+          <div className="form-group">
+            <label className="form-label">Document Title</label>
+            <input className="form-input" placeholder="Enter title…" value={newTitle}
+              onChange={e => setNewTitle(e.target.value)} autoFocus />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Initial Content</label>
+            <textarea className="form-textarea" placeholder="Start writing…" value={newContent}
+              onChange={e => setNewContent(e.target.value)} />
+          </div>
+        </Modal>
+      )}
+
+      {/* Share modal */}
+      {shareModal && <ShareModal doc={shareModal} token={token} toast={toast} onClose={() => setShareModal(null)} />}
+    </div>
+  );
+}
+
+// ── Share Modal ────────────────────────────────────────
+function ShareModal({ doc, token, toast, onClose }) {
+  const [users, setUsers] = useState([]);
+  const [selectedUser, setSelectedUser] = useState('');
+  const [sharing, setSharing] = useState(false);
+
+  useEffect(() => {
+    api('/users', {}, token).then(setUsers).catch(() => {});
+  }, []);
+
+  async function share() {
+    setSharing(true);
+    try {
+      await api('/share', { method: 'POST', body: { documentId: doc.document_id, sharedTo: selectedUser || null } }, token);
+      toast.show('Document shared', 'success'); onClose();
+    } catch (e) { toast.show(e.message, 'error'); } finally { setSharing(false); }
+  }
+
+  return (
+    <Modal title={`Share — ${doc.title}`} onClose={onClose}
+      footer={<>
+        <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+        <button className="btn btn-primary" onClick={share} disabled={sharing}>
+          {sharing ? 'Sharing…' : 'Share Document'}
+        </button>
+      </>}>
+      <div className="form-group">
+        <label className="form-label">Share with (optional)</label>
+        <select className="form-select" value={selectedUser} onChange={e => setSelectedUser(e.target.value)}>
+          <option value="">— All users / Public —</option>
+          {users.map(u => <option key={u.user_id} value={u.user_id}>{u.name} ({u.role})</option>)}
+        </select>
+      </div>
+      <p className="text-muted" style={{ fontSize: 12 }}>Sharing will be logged in the audit trail.</p>
+    </Modal>
+  );
+}
+
+// ── Editor Page ────────────────────────────────────────
+function EditorPage({ user, token, toast, editDoc, setEditDoc, setPage }) {
+  const [doc, setDoc] = useState(null);
+  const [versions, setVersions] = useState([]);
+  const [content, setContent] = useState('');
+  const [title, setTitle] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [view, setView] = useState('editor'); // editor | history | diff
+  const [diffV1, setDiffV1] = useState('');
+  const [diffV2, setDiffV2] = useState('');
+  const [diffResult, setDiffResult] = useState(null);
+  const [diffLoading, setDiffLoading] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newContent, setNewContent] = useState('');
+  const [creating, setCreating] = useState(false);
+
+  // Load doc if editing existing
+  useEffect(() => {
+    if (editDoc) {
+      setLoading(true);
+      api(`/documents/${editDoc.document_id}`, {}, token)
+        .then(d => {
+          setDoc(d);
+          setContent(d.latestVersion?.content || '');
+          setTitle(d.title);
+          loadVersions(d.document_id);
+        })
+        .catch(e => toast.show(e.message, 'error'))
+        .finally(() => setLoading(false));
+    }
+  }, [editDoc]);
+
+  async function loadVersions(docId) {
+    try {
+      const v = await api(`/documents/${docId}/versions`, {}, token);
+      setVersions(v);
+      if (v.length >= 2) { setDiffV1(String(v[v.length - 1].version_number)); setDiffV2(String(v[0].version_number)); }
+    } catch {}
+  }
+
+  async function saveEdit() {
+    if (!doc) return;
+    setSaving(true);
+    try {
+      const res = await api(`/documents/${doc.document_id}/edit`, { method: 'POST', body: { content } }, token);
+      toast.show(`Saved as version ${res.versionNumber}`, 'success');
+      await loadVersions(doc.document_id);
+    } catch (e) { toast.show(e.message, 'error'); } finally { setSaving(false); }
+  }
+
+  async function runDiff() {
+    if (!diffV1 || !diffV2 || diffV1 === diffV2) return;
+    setDiffLoading(true);
+    try {
+      const res = await api(`/documents/${doc.document_id}/compare?v1=${diffV1}&v2=${diffV2}`, {}, token);
+      setDiffResult(res);
+    } catch (e) { toast.show(e.message, 'error'); } finally { setDiffLoading(false); }
+  }
+
+  async function createDoc(e) {
+    e.preventDefault(); setCreating(true);
+    try {
+      const res = await api('/documents', { method: 'POST', body: { title: newTitle, content: newContent } }, token);
+      toast.show('Document created', 'success');
+      setShowCreate(false);
+      // Load the new doc
+      const newDoc = await api(`/documents/${res.documentId}`, {}, token);
+      setEditDoc({ document_id: res.documentId });
+    } catch (e) { toast.show(e.message, 'error'); } finally { setCreating(false); }
+  }
+
+  const canEdit = (user.role !== 'HOD') && (doc ? (user.role === 'TEACHER' || doc.created_by === user.userId) : true);
+
+  if (!editDoc) {
+    return (
+      <div>
+        <div className="empty-state">
+          <div className="empty-icon">✎</div>
+          <h3>Create a New Document</h3>
+          <p className="text-muted" style={{ marginBottom: 16 }}>Documents are immutable — every edit creates a new version.</p>
+          {user.role !== 'HOD' && (
+            <button className="btn btn-primary" onClick={() => setShowCreate(true)}>+ New Document</button>
+          )}
+        </div>
+        {showCreate && (
+          <Modal title="New Document" onClose={() => setShowCreate(false)}
+            footer={<>
+              <button className="btn btn-secondary" onClick={() => setShowCreate(false)}>Cancel</button>
+              <button className="btn btn-primary" onClick={createDoc} disabled={creating || !newTitle.trim()}>
+                {creating ? 'Creating…' : 'Create'}
+              </button>
+            </>}>
+            <div className="form-group">
+              <label className="form-label">Title</label>
+              <input className="form-input" placeholder="Document title" value={newTitle} onChange={e => setNewTitle(e.target.value)} autoFocus />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Content</label>
+              <textarea className="form-textarea" placeholder="Start writing…" value={newContent} onChange={e => setNewContent(e.target.value)} />
+            </div>
+          </Modal>
+        )}
+      </div>
+    );
+  }
+
+  if (loading) return <div className="empty-state"><p>Loading document…</p></div>;
+
+  return (
+    <div>
+      {/* Tabs */}
+      <div className="flex-gap" style={{ marginBottom: 16, borderBottom: '1px solid var(--border)', paddingBottom: 12 }}>
+        {['editor','history','diff'].map(v => (
+          <button key={v} className={`btn ${view === v ? 'btn-primary' : 'btn-ghost'} btn-sm`} onClick={() => setView(v)}>
+            {v === 'editor' ? '✎ Editor' : v === 'history' ? '◷ History' : '⊟ Compare'}
+          </button>
+        ))}
+        <span className="ver-badge" style={{ marginLeft: 'auto' }}>v{versions[0]?.version_number || 1}</span>
+        <button className="btn btn-ghost btn-sm" onClick={() => { setEditDoc(null); setPage('dashboard'); }}>← Back</button>
+      </div>
+
+      {/* Editor View */}
+      {view === 'editor' && (
+        <div className="editor-wrap">
+          <div className="editor-toolbar">
+            <div>
+              <div style={{ fontFamily: 'var(--ff-display)', fontSize: 16, fontWeight: 600 }}>{title}</div>
+              {doc && <div className="text-muted" style={{ fontSize: 12 }}>by {doc.author} · {fmtDate(doc.created_at)}</div>}
+            </div>
+            <div className="flex-gap">
+              {!canEdit && <span className="text-muted" style={{ fontSize: 12 }}>View only</span>}
+              {canEdit && (
+                <button className="btn btn-primary btn-sm" onClick={saveEdit} disabled={saving}>
+                  {saving ? 'Saving…' : '↑ Save Version'}
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="editor-area">
+            <textarea
+              value={content}
+              onChange={e => setContent(e.target.value)}
+              disabled={!canEdit}
+              placeholder={canEdit ? "Start writing… (each save creates a new immutable version)" : "Read-only"}
+              spellCheck={false}
+            />
+          </div>
+          {doc && (
+            <div className="card card-sm" style={{ fontSize: 12 }}>
+              <div className="flex-between">
+                <span className="text-muted">Document ID</span>
+                <span className="hash-text">{doc.document_id}</span>
+              </div>
+              {versions[0] && (
+                <div className="flex-between mt-1">
+                  <span className="text-muted">Content Hash (v{versions[0].version_number})</span>
+                  <span className="hash-text">{versions[0].hash?.slice(0, 40)}…</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* History View */}
+      {view === 'history' && (
+        <div>
+          <div className="section-header">
+            <span className="section-title">Version History — {versions.length} version{versions.length !== 1 ? 's' : ''}</span>
+          </div>
+          {versions.length === 0 ? (
+            <div className="empty-state"><p>No versions found.</p></div>
+          ) : (
+            <div className="timeline">
+              {versions.map((v, i) => (
+                <div key={v.version_id} className="timeline-item">
+                  <div className={`timeline-dot ${i === 0 ? 'latest' : 'old'}`} />
+                  <div className={`timeline-card ${i === 0 ? 'latest' : ''}`}>
+                    <div className="flex-between">
+                      <div className="flex-gap">
+                        <span className="ver-badge">v{v.version_number}</span>
+                        {i === 0 && <span style={{ fontSize: 11, color: 'var(--gold)' }}>◆ Latest</span>}
+                      </div>
+                      <button className="btn btn-ghost btn-sm" onClick={() => { setContent(v.content); setView('editor'); }}>
+                        View ↗
+                      </button>
+                    </div>
+                    <div className="timeline-meta">
+                      <span>👤 {v.editor}</span>
+                      <span>🕐 {fmtDate(v.timestamp)}</span>
+                      <span>{v.content.split('\n').length} lines · {v.content.length} chars</span>
+                    </div>
+                    <div className="hash-text mt-2">sha256: {v.hash}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Diff View */}
+      {view === 'diff' && (
+        <div>
+          <div className="section-header mb-3">
+            <span className="section-title">Compare Versions</span>
+          </div>
+          <div className="flex-gap mb-3" style={{ flexWrap: 'wrap' }}>
+            <div>
+              <label className="form-label">From Version</label>
+              <select className="form-select" style={{ width: 140 }} value={diffV1} onChange={e => { setDiffV1(e.target.value); setDiffResult(null); }}>
+                <option value="">Select…</option>
+                {[...versions].reverse().map(v => <option key={v.version_id} value={String(v.version_number)}>v{v.version_number} — {v.editor}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="form-label">To Version</label>
+              <select className="form-select" style={{ width: 140 }} value={diffV2} onChange={e => { setDiffV2(e.target.value); setDiffResult(null); }}>
+                <option value="">Select…</option>
+                {[...versions].reverse().map(v => <option key={v.version_id} value={String(v.version_number)}>v{v.version_number} — {v.editor}</option>)}
+              </select>
+            </div>
+            <div style={{ alignSelf: 'flex-end' }}>
+              <button className="btn btn-primary" onClick={runDiff} disabled={!diffV1 || !diffV2 || diffLoading}>
+                {diffLoading ? 'Comparing…' : '⊟ Compare'}
+              </button>
+            </div>
+          </div>
+          {diffResult && (
+            <div>
+              <div className="diff-stats">
+                <span className="diff-stat-added">+{diffResult.stats.added} added</span>
+                <span className="diff-stat-removed">−{diffResult.stats.removed} removed</span>
+                <span className="diff-stat-same">{diffResult.stats.unchanged} unchanged</span>
+              </div>
+              <div className="card" style={{ padding: 0, overflow: 'hidden', fontFamily: 'var(--ff-mono)' }}>
+                {diffResult.diff.map((line, i) => (
+                  <div key={i} className={`diff-line ${line.type}`}>
+                    {line.line || ' '}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {!diffResult && !diffLoading && (
+            <div className="empty-state" style={{ padding: 40 }}>
+              <p>Select two versions and click Compare</p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Reports Page ──────────────────────────────────────
+function ReportsPage({ user, token, toast }) {
+  const [reports, setReports] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [viewReport, setViewReport] = useState(null);
+
+  async function load() {
+    try {
+      const data = await api('/reports', {}, token);
+      setReports(data);
+    } catch (e) { toast.show(e.message, 'error'); } finally { setLoading(false); }
+  }
+  useEffect(() => { load(); }, []);
+
+  async function generate() {
+    setGenerating(true);
+    try {
+      const data = await api('/reports/generate', { method: 'POST', body: { type: 'FULL' } }, token);
+      toast.show('Report generated', 'success');
+      // Fetch full report
+      const full = await api(`/reports/${data.reportId}`, {}, token);
+      setViewReport(full);
+      load();
+    } catch (e) { toast.show(e.message, 'error'); } finally { setGenerating(false); }
+  }
+
+  async function loadReport(id) {
+    try {
+      const data = await api(`/reports/${id}`, {}, token);
+      setViewReport(data);
+    } catch (e) { toast.show(e.message, 'error'); }
+  }
+
+  return (
+    <div>
+      <div className="section-header">
+        <span className="section-title">Reports</span>
+        <button className="btn btn-primary" onClick={generate} disabled={generating}>
+          {generating ? 'Generating…' : '◈ Generate Report'}
+        </button>
+      </div>
+
+      {loading ? <div className="empty-state"><p>Loading…</p></div> :
+        reports.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-icon">◈</div>
+            <h3>No Reports Yet</h3>
+            <p>Generate a report to see a full audit summary of all documents.</p>
+          </div>
+        ) : (
+          <div className="doc-grid">
+            {reports.map(r => (
+              <div key={r.report_id} className="doc-item" onClick={() => loadReport(r.report_id)}>
+                <div className="doc-icon">📊</div>
+                <div className="doc-info">
+                  <div className="doc-title">Report — {r.type}</div>
+                  <div className="doc-meta">
+                    <span>👤 {r.generatedBy}</span>
+                    <span>🕐 {fmtDate(r.timestamp)}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      }
+
+      {viewReport && (
+        <Modal title={`Report — ${viewReport.type}`} onClose={() => setViewReport(null)}
+          footer={<button className="btn btn-secondary" onClick={() => setViewReport(null)}>Close</button>}>
+          {viewReport.data && (() => {
+            const d = viewReport.data;
+            return (
+              <div>
+                <div className="stats-bar" style={{ marginBottom: 16 }}>
+                  <div className="stat-card card-sm">
+                    <div className="stat-value text-gold" style={{ fontSize: 22 }}>{d.summary?.totalDocuments}</div>
+                    <div className="stat-label">Documents</div>
+                  </div>
+                  <div className="stat-card card-sm">
+                    <div className="stat-value" style={{ fontSize: 22, color: 'var(--teal)' }}>{d.summary?.totalUsers}</div>
+                    <div className="stat-label">Users</div>
+                  </div>
+                </div>
+                <div className="section-title mb-3" style={{ fontSize: 13 }}>Audit Summary</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+                  {d.summary?.auditSummary?.map(a => (
+                    <div key={a.action} className="card card-sm" style={{ padding: '6px 12px' }}>
+                      <span className={`action-badge action-${a.action}`}>{a.action}</span>
+                      <span style={{ marginLeft: 8, fontSize: 13, fontWeight: 600 }}>{a.count}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="section-title mb-3" style={{ fontSize: 13 }}>Documents ({d.documents?.length})</div>
+                {d.documents?.slice(0, 8).map(doc => (
+                  <div key={doc.document_id} className="card card-sm mb-3" style={{ marginBottom: 8 }}>
+                    <div className="flex-between">
+                      <span style={{ fontSize: 13, fontWeight: 600 }}>{doc.title}</span>
+                      <span className="ver-badge">v{doc.versionCount}</span>
+                    </div>
+                    <div className="text-muted" style={{ fontSize: 12 }}>by {doc.author}</div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── Audit Logs Page ────────────────────────────────────
+function AuditPage({ user, token, toast }) {
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState('');
+
+  useEffect(() => {
+    api('/audit-logs?limit=200', {}, token)
+      .then(setLogs)
+      .catch(e => toast.show(e.message, 'error'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const actions = ['CREATE_DOC','EDIT_DOC','VIEW_DOC','GENERATE_REPORT','SHARE_DATA'];
+  const filtered = filter ? logs.filter(l => l.action === filter) : logs;
+
+  return (
+    <div>
+      <div className="section-header">
+        <span className="section-title">Audit Trail</span>
+        <span className="text-muted" style={{ fontSize: 12 }}>{filtered.length} entries</span>
+      </div>
+
+      <div className="filter-bar">
+        <button className={`btn btn-sm ${!filter ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setFilter('')}>All</button>
+        {actions.map(a => (
+          <button key={a} className={`btn btn-sm ${filter === a ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setFilter(a)}>
+            {a.replace('_', ' ')}
+          </button>
+        ))}
+      </div>
+
+      {loading ? <div className="empty-state"><p>Loading…</p></div> :
+        filtered.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-icon">◎</div>
+            <h3>No audit logs</h3>
+          </div>
+        ) : (
+          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+            <table className="audit-table">
+              <thead>
+                <tr>
+                  <th>Action</th>
+                  <th>User</th>
+                  <th>Role</th>
+                  <th>Resource</th>
+                  <th>Timestamp</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(l => (
+                  <tr key={l.log_id}>
+                    <td><span className={`action-badge action-${l.action}`}>{l.action}</span></td>
+                    <td style={{ fontWeight: 500 }}>{l.userName}</td>
+                    <td><RoleBadge role={l.userRole} /></td>
+                    <td><span className="hash-text">{l.resource_id?.slice(0, 18)}…</span></td>
+                    <td className="text-muted" style={{ fontSize: 12 }}>{fmtDate(l.timestamp)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      }
+    </div>
+  );
+}
+
+// ── Page Titles ────────────────────────────────────────
+const PAGE_META = {
+  dashboard: { title: 'Dashboard', sub: 'All your documents in one place' },
+  editor:    { title: 'Document Editor', sub: 'Immutable versioned editing' },
+  reports:   { title: 'Reports', sub: 'Aggregate document & version data' },
+  audit:     { title: 'Audit Logs', sub: 'Every action, permanently recorded' },
+};
+
+// ── Root App ───────────────────────────────────────────
+function App() {
+  const [user, setUser] = useState(() => { try { return JSON.parse(localStorage.getItem('user')); } catch { return null; } });
+  const [token, setToken] = useState(() => localStorage.getItem('token'));
+  const [page, setPage] = useState('dashboard');
+  const [editDoc, setEditDoc] = useState(null);
+  const toast = useToast();
+
+  function handleLogin(u, t) { setUser(u); setToken(t); setPage('dashboard'); }
+
+  function handleLogout() {
+    localStorage.removeItem('token'); localStorage.removeItem('user');
+    setUser(null); setToken(null); setEditDoc(null);
+  }
+
+  if (!user) return (
+    <>
+      <Toast toasts={toast.toasts} />
+      <AuthPage onLogin={handleLogin} />
+    </>
+  );
+
+  const meta = PAGE_META[page] || PAGE_META.dashboard;
+
+  return (
+    <div className="layout">
+      <Toast toasts={toast.toasts} />
+      <Sidebar user={user} page={page} setPage={p => { setPage(p); if (p !== 'editor') setEditDoc(null); }} onLogout={handleLogout} />
+      <div className="main">
+        <div className="topbar">
+          <div>
+            <div className="topbar-title">{meta.title}</div>
+            <div className="topbar-sub">{meta.sub}</div>
+          </div>
+          <div className="flex-gap">
+            <div className="user-avatar" style={{ ...avatarStyle(user.role), width: 32, height: 32 }}>{initials(user.name)}</div>
+            <RoleBadge role={user.role} />
+          </div>
+        </div>
+        <div className="content">
+          {page === 'dashboard' && <Dashboard user={user} token={token} toast={toast} setPage={setPage} setEditDoc={setEditDoc} />}
+          {page === 'editor'    && <EditorPage user={user} token={token} toast={toast} editDoc={editDoc} setEditDoc={setEditDoc} setPage={setPage} />}
+          {page === 'reports'   && <ReportsPage user={user} token={token} toast={toast} />}
+          {page === 'audit'     && <AuditPage user={user} token={token} toast={toast} />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Mount ──────────────────────────────────────────────
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
