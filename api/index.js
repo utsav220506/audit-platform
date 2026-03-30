@@ -12,7 +12,12 @@ const JWT_SECRET = process.env.JWT_SECRET || "audit-platform-secret-2024";
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  ssl: {
+    rejectUnauthorized: false,
+  },
+  max: 1, // VERY IMPORTANT for serverless
+  idleTimeoutMillis: 10000,
+  connectionTimeoutMillis: 10000,
 });
 
 let isInitialized = false;
