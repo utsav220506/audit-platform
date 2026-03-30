@@ -226,7 +226,9 @@ class AuditPlatformApp {
             <td>v${doc.latest_version || 1}</td>
             <td class="text-subtle">${modDate}</td>
             <td>
-              <button class="secondary-btn" onclick="app.setupEdit('${doc.document_id}')">Edit</button>
+              <button class="secondary-btn" onclick="app.loadDocument('${doc.document_id}')">
+                ${this.user.role === 'STUDENT' ? 'View / Edit' : 'View'}
+              </button>
             </td>
           `;
           tbody.appendChild(tr);
@@ -237,12 +239,33 @@ class AuditPlatformApp {
     }
   }
 
-  setupEdit(docId) {
-    document.getElementById('edit-pane').style.opacity = '1';
-    document.getElementById('edit-pane').style.pointerEvents = 'all';
-    document.getElementById('edit-id').value = docId;
-    this.showToast('Editor unlocked for Document ID: ' + docId.substring(0,6) + '...', 'success');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+  async loadDocument(docId) {
+    try {
+      this.showToast('Fetching document securely...', 'success');
+      const res = await fetch(`${API}/documents/${docId}`, { headers: this.headers() });
+      const data = await res.json();
+      
+      if (!res.ok) throw new Error(data.error);
+
+      document.getElementById('edit-pane').style.opacity = '1';
+      document.getElementById('edit-pane').style.pointerEvents = 'all';
+      document.getElementById('edit-id').value = docId;
+      document.getElementById('edit-content').value = data.latestVersion.content;
+      
+      if (this.user.role !== 'STUDENT') {
+        document.getElementById('edit-content').readOnly = true;
+        document.getElementById('edit-btn').style.display = 'none';
+        document.querySelector('#edit-pane h3').innerText = 'Viewing Document (Read-Only)';
+      } else {
+        document.getElementById('edit-content').readOnly = false;
+        document.getElementById('edit-btn').style.display = 'block';
+        document.querySelector('#edit-pane h3').innerText = 'Edit Document';
+      }
+
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch(e) {
+      this.showToast(e.message, 'error');
+    }
   }
 
   async editDoc() {
