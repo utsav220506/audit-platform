@@ -1,8 +1,15 @@
 const API = "/api";
 
 function switchTab(tab) {
-  document.querySelectorAll(".form").forEach(f => f.classList.remove("active"));
-  document.querySelectorAll(".tabs button").forEach(b => b.classList.remove("active"));
+  const loginForm = document.getElementById("login-form");
+  const registerForm = document.getElementById("register-form");
+  const loginTab = document.getElementById("login-tab");
+  const registerTab = document.getElementById("register-tab");
+
+  loginForm.classList.remove("active");
+  registerForm.classList.remove("active");
+  loginTab.classList.remove("active");
+  registerTab.classList.remove("active");
 
   if (tab === "login") {
     loginForm.classList.add("active");
@@ -14,29 +21,47 @@ function switchTab(tab) {
 }
 
 async function register() {
-  const res = await fetch(`${API}/auth/register`, {
+  const name = document.getElementById("reg-name").value;
+  const email = document.getElementById("reg-email").value;
+  const password = document.getElementById("reg-password").value;
+  const role = document.getElementById("reg-role").value;
+
+  const res = await fetch("/api/auth/register", {
     method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({
-      name: regName.value,
-      email: regEmail.value,
-      password: regPassword.value,
-      role: regRole.value
-    }),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, email, password, role }),
   });
 
-  alert((await res.json()).message || "Registered");
+  const data = await res.json();
+
+  if (res.ok) {
+    alert("Registered successfully!");
+  } else {
+    alert(data.error || "Error");
+  }
 }
 
 async function login() {
-  const res = await fetch(`${API}/auth/login`, {
+  const email = document.getElementById("login-email").value;
+  const password = document.getElementById("login-password").value;
+
+  const res = await fetch("/api/auth/login", {
     method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({
-      email: loginEmail.value,
-      password: loginPassword.value
-    }),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
   });
+
+  const data = await res.json();
+
+  if (!res.ok) return alert(data.error);
+
+  localStorage.setItem("token", data.token);
+
+  const payload = JSON.parse(atob(data.token.split(".")[1]));
+  document.getElementById("auth-page").style.display = "none";
+  document.getElementById("app").style.display = "flex";
+  document.getElementById("role-display").innerText = payload.role;
+}
 
   const data = await res.json();
   if (!res.ok) return alert(data.error);
@@ -50,7 +75,7 @@ async function login() {
   roleDisplay.innerText = role;
 
   showSection("student");
-}
+
 
 function showSection(section) {
   document.querySelectorAll(".section").forEach(s => s.classList.remove("active"));
