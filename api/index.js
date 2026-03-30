@@ -216,13 +216,56 @@ apiRouter.post('/reports/generate', auth, requireRole('TEACHER','HOD'), async (r
     const { type='FULL' } = req.body;
     const { rows:users } = await pool.query(`SELECT user_id,name,email,role,created_at FROM users`);
     const { rows:docs } = await pool.query(`SELECT d.*,u.name AS author FROM documents d JOIN users u ON d.created_by=u.user_id`);
+    
+    // Check if Teacher interacted with documents to mark them as 'Audited'
+    const { rows:auditChecks } = await pool.query(`
+      SELECT al.resource_id 
+      FROM audit_logs al 
+      JOIN users u ON al.user_id = u.user_id 
+      WHERE al.resource_type = 'document' 
+        AND u.role IN ('TEACHER','HOD') 
+        AND al.action IN ('VIEW_DOC', 'EDIT_DOC')
+    `);
+    
+    const auditedDocIds = new Set(auditChecks.map(a => a.resource_id));
+
     const enriched = await Promise.all(docs.map(async doc => {
       const { rows:versions } = await pool.query(`SELECT dv.version_number,dv.timestamp,dv.hash,u.name AS editor FROM document_versions dv JOIN users u ON dv.created_by=u.user_id WHERE dv.document_id=$1 ORDER BY dv.version_number ASC`, [doc.document_id]);
-      return { ...doc, versionCount:versions.length, versions };
+      return { 
+        ...doc, 
+        versionCount: versions.length, 
+        isAudited: auditedDocIds.has(doc.document_id),
+        versions 
+      };
     }));
+
+    // Aggregate Student Specific Metrics
+    const studentMetrics = {};
+    users.filter(u => u.role === 'STUDENT').forEach(u => {
+      studentMetrics[u.user_id] = { name: u.name, total_docs: 0, audited_docs: 0, raw_docs: [] };
+    });
+
+    enriched.forEach(doc => {
+      if (studentMetrics[doc.created_by]) {
+        studentMetrics[doc.created_by].total_docs++;
+        studentMetrics[doc.created_by].raw_docs.push(doc.document_id);
+        if (doc.isAudited) studentMetrics[doc.created_by].audited_docs++;
+      }
+    });
+
     const { rows:auditSummary } = await pool.query(`SELECT action,COUNT(*) as count FROM audit_logs GROUP BY action`);
     const reportId=uuid();
-    const reportData={ type, generatedAt:new Date().toISOString(), generatedBy:req.user.name, summary:{ totalUsers:users.length, totalDocuments:docs.length, auditSummary }, users, documents:enriched };
+    
+    const reportData = { 
+      type, 
+      generatedAt: new Date().toISOString(), 
+      generatedBy: req.user.name, 
+      summary: { totalUsers: users.length, totalDocuments: docs.length, auditSummary }, 
+      studentMetrics: Object.values(studentMetrics),
+      users, 
+      documents: enriched 
+    };
+    
     await pool.query(`INSERT INTO reports(report_id,type,generated_by,data) VALUES($1,$2,$3,$4)`, [reportId,type,req.user.userId,JSON.stringify(reportData)]);
     await auditLog('GENERATE_REPORT', req.user.userId, reportId, 'report', { type });
     res.status(201).json({ reportId, ...reportData });

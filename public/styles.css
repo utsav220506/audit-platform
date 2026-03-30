@@ -273,3 +273,8 @@ button { cursor: pointer; font-family: var(--font-family); font-size: 14px; font
 .modal-header { padding: 24px; padding-bottom: 0; }
 .icon-btn { background: transparent; border: none; cursor: pointer; color: var(--text-subtle); display: flex; align-items: center; justify-content: center; padding: 8px; border-radius: 8px; transition: all 0.2s; }
 .icon-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
+/* Diff Viewer */
+.diff-added { background-color: rgba(34, 197, 94, 0.2); color: #86efac; text-decoration: none; padding: 2px 4px; border-radius: 3px; }
+.diff-removed { background-color: rgba(239, 68, 68, 0.2); color: #fca5a5; text-decoration: line-through; padding: 2px 4px; border-radius: 3px; }
+.diff-unchanged { color: var(--text-subtle); }

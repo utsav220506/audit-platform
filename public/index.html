@@ -30,6 +30,30 @@
     </div>
   </div>
 
+  <!-- Differential Comparison Modal -->
+  <div id="diff-modal" class="modal-backdrop" style="display: none;">
+    <div class="modal-content glass-panel" style="max-width: 1000px;">
+      <div class="modal-header flex-between mb-20">
+        <h2 id="diff-modal-title">Version Comparison</h2>
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <input type="hidden" id="diff-doc-id">
+          <select id="diff-v1-select" class="glass-input" style="padding: 4px; border-radius: 4px; min-width: 60px;"></select>
+          <span style="color: var(--text-subtle);">vs</span>
+          <select id="diff-v2-select" class="glass-input" style="padding: 4px; border-radius: 4px; min-width: 60px;"></select>
+          <button class="primary-btn" style="padding: 6px 12px; font-size: 12px;" onclick="app.executeDiff()">Compare</button>
+          <button class="icon-btn text-danger" onclick="document.getElementById('diff-modal').style.display='none'">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <div class="glass-card">
+          <pre id="diff-modal-text" style="white-space: pre-wrap; line-height: 1.6; font-family: 'Courier New', monospace; font-size: 14px; background: rgba(0,0,0,0.3); padding: 20px; border-radius: 8px; overflow-x: auto;"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- AUTHENTICATION VIEW -->
   <div id="auth-page" class="view-active glass-bg auth-container">
     <div class="auth-card glass-panel">
@@ -243,6 +267,24 @@
 
           <div class="glass-card mt-20" style="height: 400px; display: flex; justify-content: center;">
             <canvas id="audit-chart"></canvas>
+          </div>
+
+          <!-- Deep Metrics Table -->
+          <div class="glass-card mt-20" id="student-metrics-card" style="display: none;">
+            <h3 class="mb-20">Student Documentation & Audit Status</h3>
+            <div style="overflow-x: auto;">
+              <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                <thead>
+                  <tr style="border-bottom: 2px solid rgba(255,255,255,0.1); color: var(--text-subtle);">
+                    <th style="padding: 12px 8px;">Student Name</th>
+                    <th style="padding: 12px 8px;">Created Docs</th>
+                    <th style="padding: 12px 8px;">Audited Docs</th>
+                    <th style="padding: 12px 8px;">Audit Status</th>
+                  </tr>
+                </thead>
+                <tbody id="student-metrics-body"></tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>

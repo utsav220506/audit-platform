@@ -240,6 +240,11 @@ class AuditPlatformApp {
               <button class="secondary-btn" title="Read Full Screen" onclick="app.viewDocument('${safeTitle}', '${doc.document_id}')">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
               </button>
+              ${this.user.role === 'TEACHER' ? `
+                <button class="secondary-btn" title="Compare Versions" onclick="app.openDiffModal('${doc.document_id}')">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg>
+                </button>
+              ` : ''}
               ${['STUDENT', 'TEACHER'].includes(this.user.role) ? `
                 <button class="secondary-btn" title="Load into Editor" onclick="app.loadDocument('${doc.document_id}')">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
@@ -267,6 +272,71 @@ class AuditPlatformApp {
       document.getElementById('modal-text').innerText = data.latestVersion.content;
       document.getElementById('doc-modal').style.display = 'flex';
       
+    } catch(e) {
+      this.showToast(e.message, 'error');
+    }
+  }
+
+  // --- Differential Versioning --- //
+
+  async openDiffModal(docId) {
+    try {
+      this.showToast('Fetching document revisions...', 'success');
+      const res = await fetch(`${API}/documents/${docId}/versions`, { headers: this.headers() });
+      const versions = await res.json();
+      
+      if (!res.ok) throw new Error(versions.error);
+      if (versions.length < 2) return this.showToast('Only one version exists. Cannot compute difference.', 'error');
+
+      document.getElementById('diff-doc-id').value = docId;
+      const v1sel = document.getElementById('diff-v1-select');
+      const v2sel = document.getElementById('diff-v2-select');
+      v1sel.innerHTML = '';
+      v2sel.innerHTML = '';
+
+      versions.forEach(v => {
+        const o1 = document.createElement('option');
+        const o2 = document.createElement('option');
+        o1.value = v.version_number; o1.innerText = 'v'+v.version_number;
+        o2.value = v.version_number; o2.innerText = 'v'+v.version_number;
+        v1sel.appendChild(o1);
+        v2sel.appendChild(o2);
+      });
+
+      // Default to Latest vs Previous
+      v1sel.value = versions[0].version_number; // Latest
+      v2sel.value = versions[1].version_number; // Previous
+
+      document.getElementById('diff-modal-text').innerHTML = '<span class="text-subtle">Click Compare to render visual difference tree.</span>';
+      document.getElementById('diff-modal').style.display = 'flex';
+    } catch(e) {
+      this.showToast(e.message, 'error');
+    }
+  }
+
+  async executeDiff() {
+    const docId = document.getElementById('diff-doc-id').value;
+    const v2 = document.getElementById('diff-v1-select').value; // Newer
+    const v1 = document.getElementById('diff-v2-select').value; // Older
+
+    if (v1 === v2) return this.showToast('Identical versions selected', 'error');
+
+    try {
+      document.getElementById('diff-modal-text').innerHTML = '<span class="text-subtle">Computing cryptographic differences...</span>';
+      const res = await fetch(`${API}/documents/${docId}/compare?v1=${v1}&v2=${v2}`, { headers: this.headers() });
+      const data = await res.json();
+      
+      if (!res.ok) throw new Error(data.error);
+
+      // Render Diff Array
+      const diffHtml = data.diff.map(segment => {
+        if (segment.type === 'added') return `<span class="diff-added">${segment.line}</span>\n`;
+        if (segment.type === 'removed') return `<span class="diff-removed">${segment.line}</span>\n`;
+        return `<span class="diff-unchanged">${segment.line}</span>\n`;
+      }).join('');
+
+      document.getElementById('diff-modal-text').innerHTML = diffHtml;
+      this.showToast(`Diff Computed: ${data.stats.added} Additions, ${data.stats.removed} Removals`);
     } catch(e) {
       this.showToast(e.message, 'error');
     }
@@ -405,6 +475,30 @@ class AuditPlatformApp {
         }
       });
       
+      // Render Deep Student Analytics Table
+      if (data.studentMetrics) {
+        document.getElementById('student-metrics-card').style.display = 'block';
+        const tbody = document.getElementById('student-metrics-body');
+        tbody.innerHTML = '';
+        data.studentMetrics.forEach(student => {
+          const ratio = student.total_docs > 0 ? Math.round((student.audited_docs / student.total_docs) * 100) : 0;
+          let statusBadge = '<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #fca5a5">Pending Review</span>';
+          if (student.total_docs === 0) statusBadge = '<span class="text-subtle">-</span>';
+          else if (ratio === 100) statusBadge = '<span class="badge" style="background: rgba(34, 197, 94, 0.2); color: #86efac">Fully Audited</span>';
+          else if (ratio > 0) statusBadge = `<span class="badge" style="background: rgba(234, 179, 8, 0.2); color: #fde047">Partial (${ratio}%)</span>`;
+
+          const tr = document.createElement('tr');
+          tr.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
+          tr.innerHTML = `
+            <td style="padding: 12px 8px;"><strong>${student.name}</strong></td>
+            <td style="padding: 12px 8px;">${student.total_docs}</td>
+            <td style="padding: 12px 8px;">${student.audited_docs} / ${student.total_docs}</td>
+            <td style="padding: 12px 8px;">${statusBadge}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+
       this.showToast('Intelligence Report regenerated successfully.');
     } catch (e) {
       if(e.message.indexOf('Access denied') === -1) {
