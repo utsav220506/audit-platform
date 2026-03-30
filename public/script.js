@@ -6,11 +6,13 @@ function switchTab(tab) {
   const loginTab = document.getElementById("login-tab");
   const registerTab = document.getElementById("register-tab");
 
+  // remove active from everything
   loginForm.classList.remove("active");
   registerForm.classList.remove("active");
   loginTab.classList.remove("active");
   registerTab.classList.remove("active");
 
+  // activate selected tab
   if (tab === "login") {
     loginForm.classList.add("active");
     loginTab.classList.add("active");
