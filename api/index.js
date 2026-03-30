@@ -67,23 +67,42 @@ const apiRouter = express.Router();
 apiRouter.get('/health', (req, res) => res.json({ ok: true }));
 
 apiRouter.post('/auth/register', async (req, res) => {
+  console.log('-> [REGISTRY] API path hit!');
   try {
     const { name, email, password, role } = req.body;
+    console.log('-> [REGISTRY] Form parsed for:', email, 'Role:', role);
+    
     if (!name||!email||!password||!role) return res.status(400).json({ error: 'All fields are required' });
     if (!['STUDENT','TEACHER','HOD'].includes(role)) return res.status(400).json({ error: 'Invalid role' });
     if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    
+    console.log('-> [REGISTRY] Hashing password...');
     const passwordHash = bcrypt.hashSync(password, 12);
     const userId = uuid();
-    await pool.query(
+    
+    console.log(`-> [REGISTRY] Establishing DB Connection to insert user... (DB URL provided: ${!!process.env.DATABASE_URL})`);
+    
+    // Explicit 8-second circuit breaker for hanging pools
+    const queryPromise = pool.query(
       `INSERT INTO users (user_id,name,email,password_hash,role) VALUES ($1,$2,$3,$4,$5)`,
       [userId, name.trim(), email.toLowerCase().trim(), passwordHash, role]
     );
+
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('DATABASE_CONNECTION_TIMEOUT: Query hung for over 8 seconds.')), 8000));
+    
+    await Promise.race([queryPromise, timeoutPromise]);
+    
+    console.log('-> [REGISTRY] DB Insertion Success!');
     const token = jwt.sign({ userId, name, email, role }, JWT_SECRET, { expiresIn: '24h' });
     res.status(201).json({ token, user: { userId, name, email, role } });
   } catch(e) {
-    console.error('REGISTER:', e.message);
+    console.error('-> [REGISTRY ERROR]:', e.message);
     if(e.message.includes('unique')||e.message.includes('duplicate'))
       return res.status(409).json({ error: 'Email already registered' });
+    if(e.message.includes('relation "users" does not exist'))
+      return res.status(500).json({ error: 'CRITICAL: The users table was NOT found in Supabase! Ensure setup queries ran successfully.' });
+    if(e.message.includes('DATABASE_CONNECTION_TIMEOUT'))
+      return res.status(504).json({ error: 'CRITICAL: Vercel hung waiting for Supabase. Check if your Vercel Environment Variables are actively deployed.' });
     res.status(500).json({ error: e.message });
   }
 });
