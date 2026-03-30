@@ -59,18 +59,20 @@ class AuditPlatformApp {
 
     if (!email || !password) return this.showToast('Please enter credentials', 'error');
 
+    const btn = document.querySelector('#login-form button');
     try {
-      const btn = document.querySelector('#login-form button');
       btn.innerText = 'Authenticating...';
       const res = await fetch(`${API}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password })
       });
-      const data = await res.json();
-      btn.innerText = 'Sign In';
+      
+      let data;
+      try { data = await res.json(); } 
+      catch { throw new Error(`Server returned non-JSON response (Status: ${res.status}). Check Vercel logs.`); }
 
-      if (!res.ok) throw new Error(data.error);
+      if (!res.ok) throw new Error(data.error || 'Login failed');
 
       this.token = data.token;
       this.user = data.user;
@@ -81,6 +83,8 @@ class AuditPlatformApp {
       this.showDashboard();
     } catch (e) {
       this.showToast(e.message, 'error');
+    } finally {
+      btn.innerText = 'Sign In';
     }
   }
 
@@ -90,18 +94,20 @@ class AuditPlatformApp {
     const password = document.getElementById('reg-password').value;
     const role = document.getElementById('reg-role').value;
 
+    const btn = document.querySelector('#register-form button');
     try {
-      const btn = document.querySelector('#register-form button');
       btn.innerText = 'Provisioning...';
       const res = await fetch(`${API}/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, email, password, role })
       });
-      const data = await res.json();
-      btn.innerText = 'Create Account';
+      
+      let data;
+      try { data = await res.json(); } 
+      catch { throw new Error(`Server returned non-JSON response (Status: ${res.status}). Check Vercel logs.`); }
 
-      if (!res.ok) throw new Error(data.error);
+      if (!res.ok) throw new Error(data.error || 'Registration failed');
 
       this.token = data.token;
       this.user = data.user;
@@ -112,6 +118,8 @@ class AuditPlatformApp {
       this.showDashboard();
     } catch (e) {
       this.showToast(e.message, 'error');
+    } finally {
+      btn.innerText = 'Create Account';
     }
   }
 
