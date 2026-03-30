@@ -1,5 +1,9 @@
 {
   "routes": [
-    { "src": "/api/(.*)", "dest": "/api/index.js" }
+    { "src": "/api/(.*)", "dest": "/api/index.js" },
+    { "src": "/auth/(.*)", "dest": "/api/index.js" },
+    { "src": "/documents(.*)", "dest": "/api/index.js" },
+    { "src": "/audit-logs", "dest": "/api/index.js" },
+    { "src": "/health", "dest": "/api/index.js" }
   ]
 }
