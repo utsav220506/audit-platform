@@ -5,7 +5,6 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const cors = require("cors");
 const crypto = require("crypto");
-const path = require("path");
 
 const app = express();
 
@@ -16,7 +15,6 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
-// ---------- INIT DB (run once) ----------
 let isInitialized = false;
 
 async function initDB() {
@@ -30,7 +28,7 @@ async function initDB() {
         name TEXT NOT NULL,
         email TEXT UNIQUE NOT NULL,
         password_hash TEXT NOT NULL,
-        role TEXT CHECK(role IN ('STUDENT','TEACHER','HOD')) NOT NULL,
+        role TEXT NOT NULL,
         created_at TIMESTAMP DEFAULT NOW()
       );
 
@@ -62,18 +60,16 @@ async function initDB() {
       );
     `);
 
-    console.log("DB initialized");
     isInitialized = true;
   } finally {
     client.release();
   }
 }
 
-// ---------- MIDDLEWARE ----------
 app.use(cors());
 app.use(express.json());
 
-// ---------- HELPERS ----------
+// helpers
 function uuid() {
   return crypto.randomUUID();
 }
@@ -94,37 +90,26 @@ function auth(req, res, next) {
   }
 }
 
-function requireRole(...roles) {
-  return (req, res, next) => {
-    if (!roles.includes(req.user.role)) {
-      return res.status(403).json({ error: "Access denied" });
-    }
-    next();
-  };
-}
-
-async function auditLog(action, userId, resourceId, resourceType, metadata = {}) {
+async function auditLog(action, userId, resourceId, resourceType) {
   try {
     await pool.query(
-      `INSERT INTO audit_logs VALUES ($1,$2,$3,$4,$5,NOW(),$6)`,
-      [uuid(), action, userId, resourceId, resourceType, JSON.stringify(metadata)]
+      `INSERT INTO audit_logs VALUES ($1,$2,$3,$4,$5,NOW(),'{}')`,
+      [uuid(), action, userId, resourceId, resourceType]
     );
-  } catch (e) {
-    console.error("Audit error:", e.message);
-  }
+  } catch {}
 }
 
-// ---------- ROUTES ----------
+// ---------------- ROUTES ----------------
 
 // health
-app.get("/api/health", (req, res) => {
+app.get(["/api/health", "/health"], (req, res) => {
   res.json({ ok: true });
 });
 
 // register
-app.post("/api/auth/register", async (req, res) => {
+app.post(["/api/auth/register", "/auth/register"], async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role = "STUDENT" } = req.body;
 
     const hash = bcrypt.hashSync(password, 12);
     const id = uuid();
@@ -143,7 +128,7 @@ app.post("/api/auth/register", async (req, res) => {
 });
 
 // login
-app.post("/api/auth/login", async (req, res) => {
+app.post(["/api/auth/login", "/auth/login"], async (req, res) => {
   const { email, password } = req.body;
 
   const { rows } = await pool.query(
@@ -170,7 +155,7 @@ app.post("/api/auth/login", async (req, res) => {
 });
 
 // create document
-app.post("/api/documents", auth, async (req, res) => {
+app.post(["/api/documents", "/documents"], auth, async (req, res) => {
   const { title, content } = req.body;
 
   const docId = uuid();
@@ -192,47 +177,54 @@ app.post("/api/documents", auth, async (req, res) => {
 });
 
 // get documents
-app.get("/api/documents", auth, async (req, res) => {
+app.get(["/api/documents", "/documents"], auth, async (req, res) => {
   const { rows } = await pool.query(`SELECT * FROM documents`);
   res.json(rows);
 });
 
 // edit document
-app.post("/api/documents/:id/edit", auth, async (req, res) => {
-  const { content } = req.body;
+app.post(
+  ["/api/documents/:id/edit", "/documents/:id/edit"],
+  auth,
+  async (req, res) => {
+    const { content } = req.body;
 
-  const { rows } = await pool.query(
-    `SELECT MAX(version_number) as v FROM document_versions WHERE document_id=$1`,
-    [req.params.id]
-  );
+    const { rows } = await pool.query(
+      `SELECT MAX(version_number) as v FROM document_versions WHERE document_id=$1`,
+      [req.params.id]
+    );
 
-  const newVersion = (rows[0].v || 0) + 1;
+    const newVersion = (rows[0].v || 0) + 1;
 
-  await pool.query(
-    `INSERT INTO document_versions VALUES ($1,$2,$3,NOW(),$4,$5,$6)`,
-    [
-      uuid(),
-      req.params.id,
-      content,
-      req.user.userId,
-      sha256(content),
-      newVersion,
-    ]
-  );
+    await pool.query(
+      `INSERT INTO document_versions VALUES ($1,$2,$3,NOW(),$4,$5,$6)`,
+      [
+        uuid(),
+        req.params.id,
+        content,
+        req.user.userId,
+        sha256(content),
+        newVersion,
+      ]
+    );
 
-  await auditLog("EDIT_DOC", req.user.userId, req.params.id, "document");
+    await auditLog("EDIT_DOC", req.user.userId, req.params.id, "document");
 
-  res.json({ version: newVersion });
-});
+    res.json({ version: newVersion });
+  }
+);
 
 // audit logs
-app.get("/api/audit-logs", auth, requireRole("TEACHER", "HOD"), async (req, res) => {
-  const { rows } = await pool.query(`SELECT * FROM audit_logs`);
-  res.json(rows);
-});
+app.get(
+  ["/api/audit-logs", "/audit-logs"],
+  auth,
+  async (req, res) => {
+    const { rows } = await pool.query(`SELECT * FROM audit_logs`);
+    res.json(rows);
+  }
+);
 
 // ---------- EXPORT ----------
-
 module.exports = async (req, res) => {
   await initDB();
   return serverless(app)(req, res);
