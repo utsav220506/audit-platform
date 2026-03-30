@@ -240,7 +240,7 @@ class AuditPlatformApp {
               <button class="secondary-btn" title="Read Full Screen" onclick="app.viewDocument('${safeTitle}', '${doc.document_id}')">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
               </button>
-              ${this.user.role === 'STUDENT' ? `
+              ${['STUDENT', 'TEACHER'].includes(this.user.role) ? `
                 <button class="secondary-btn" title="Load into Editor" onclick="app.loadDocument('${doc.document_id}')">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                 </button>
@@ -285,7 +285,7 @@ class AuditPlatformApp {
       document.getElementById('edit-id').value = docId;
       document.getElementById('edit-content').value = data.latestVersion.content;
       
-      if (this.user.role !== 'STUDENT') {
+      if (this.user.role === 'HOD') {
         document.getElementById('edit-content').readOnly = true;
         document.getElementById('edit-btn').style.display = 'none';
         document.querySelector('#edit-pane h3').innerText = 'Viewing Document (Read-Only)';
@@ -346,7 +346,7 @@ class AuditPlatformApp {
           <td class="text-subtle">${new Date(log.timestamp).toLocaleString()}</td>
           <td><span class="badge" style="background: rgba(139, 92, 246, 0.2); color: #c084fc">${log.action}</span></td>
           <td>${log.userRole}</td>
-          <td class="text-subtle">${log.user_id.substring(0,8)}...</td>
+          <td class="text-subtle">${log.userName}</td>
           <td>${log.resource_id ? log.resource_id.substring(0,8) + '...' : 'System'}</td>
         `;
         tbody.appendChild(tr);
