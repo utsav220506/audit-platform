@@ -2,74 +2,84 @@
 <html>
 <head>
   <title>Audit Platform</title>
+  <link rel="stylesheet" href="styles.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
-<h1>Audit Platform</h1>
+<div class="container">
 
-<!-- AUTH -->
-<div id="auth">
-  <h2>Register</h2>
-  <input id="reg-name" placeholder="Name">
-  <input id="reg-email" placeholder="Email">
-  <input id="reg-password" type="password" placeholder="Password">
+  <h1>📄 Audit Platform</h1>
 
-  <select id="reg-role">
-    <option value="STUDENT">Student</option>
-    <option value="TEACHER">Teacher</option>
-    <option value="HOD">HOD</option>
-  </select>
+  <!-- AUTH -->
+  <div id="auth" class="card">
+    <h2>Register</h2>
+    <input id="reg-name" placeholder="Name">
+    <input id="reg-email" placeholder="Email">
+    <input id="reg-password" type="password" placeholder="Password">
 
-  <button onclick="register()">Register</button>
+    <select id="reg-role">
+      <option value="STUDENT">Student</option>
+      <option value="TEACHER">Teacher</option>
+      <option value="HOD">HOD</option>
+    </select>
 
-  <h2>Login</h2>
-  <input id="login-email" placeholder="Email">
-  <input id="login-password" type="password">
-  <button onclick="login()">Login</button>
-</div>
+    <button onclick="register()">Register</button>
 
-<hr>
+    <hr>
 
-<!-- DASHBOARD -->
-<div id="dashboard" style="display:none">
-
-  <h2 id="role-display"></h2>
-
-  <!-- STUDENT -->
-  <div id="student-section">
-    <h3>Create Document</h3>
-    <input id="doc-title" placeholder="Title">
-    <textarea id="doc-content"></textarea>
-    <button onclick="createDoc()">Create</button>
-
-    <h3>Your Documents</h3>
-    <button onclick="getDocs()">Load</button>
-    <ul id="docs"></ul>
-
-    <h3>Edit Document</h3>
-    <input id="edit-id" placeholder="Doc ID">
-    <textarea id="edit-content"></textarea>
-    <button onclick="editDoc()">Edit</button>
+    <h2>Login</h2>
+    <input id="login-email" placeholder="Email">
+    <input id="login-password" type="password">
+    <button onclick="login()">Login</button>
   </div>
 
-  <!-- TEACHER -->
-  <div id="teacher-section" style="display:none">
-    <h3>Audit Logs</h3>
-    <button onclick="getAudit()">Load Logs</button>
-    <ul id="audit"></ul>
+  <!-- DASHBOARD -->
+  <div id="dashboard" style="display:none">
 
-    <h3>Version History</h3>
-    <input id="version-doc-id" placeholder="Doc ID">
-    <button onclick="getVersions()">Get Versions</button>
-    <ul id="versions"></ul>
-  </div>
+    <div class="header">
+      <h2 id="role-display"></h2>
+    </div>
 
-  <!-- HOD -->
-  <div id="hod-section" style="display:none">
-    <h3>Reports</h3>
-    <button onclick="generateReport()">Generate Report</button>
-    <canvas id="chart"></canvas>
+    <!-- STUDENT -->
+    <div id="student-section" class="grid">
+
+      <div class="card">
+        <h3>Create Document</h3>
+        <input id="doc-title" placeholder="Title">
+        <textarea id="doc-content"></textarea>
+        <button onclick="createDoc()">Create</button>
+      </div>
+
+      <div class="card">
+        <h3>Your Documents</h3>
+        <button onclick="getDocs()">Load</button>
+        <ul id="docs"></ul>
+      </div>
+
+      <div class="card">
+        <h3>Edit Document</h3>
+        <input id="edit-id" placeholder="Doc ID">
+        <textarea id="edit-content"></textarea>
+        <button onclick="editDoc()">Update</button>
+      </div>
+
+    </div>
+
+    <!-- TEACHER -->
+    <div id="teacher-section" class="card" style="display:none">
+      <h3>Audit Logs</h3>
+      <button onclick="getAudit()">Load Logs</button>
+      <ul id="audit"></ul>
+    </div>
+
+    <!-- HOD -->
+    <div id="hod-section" class="card" style="display:none">
+      <h3>Reports</h3>
+      <button onclick="generateReport()">Generate Report</button>
+      <canvas id="chart"></canvas>
+    </div>
+
   </div>
 
 </div>
