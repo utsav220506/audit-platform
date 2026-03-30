@@ -1,16 +1,28 @@
 const API = "/api";
 
-// ---------- AUTH ----------
-async function register() {
-  const name = regName.value;
-  const email = regEmail.value;
-  const password = regPassword.value;
-  const role = regRole.value;
+function switchTab(tab) {
+  document.querySelectorAll(".form").forEach(f => f.classList.remove("active"));
+  document.querySelectorAll(".tabs button").forEach(b => b.classList.remove("active"));
 
+  if (tab === "login") {
+    loginForm.classList.add("active");
+    loginTab.classList.add("active");
+  } else {
+    registerForm.classList.add("active");
+    registerTab.classList.add("active");
+  }
+}
+
+async function register() {
   const res = await fetch(`${API}/auth/register`, {
     method: "POST",
     headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({ name, email, password, role }),
+    body: JSON.stringify({
+      name: regName.value,
+      email: regEmail.value,
+      password: regPassword.value,
+      role: regRole.value
+    }),
   });
 
   alert((await res.json()).message || "Registered");
@@ -32,44 +44,33 @@ async function login() {
   localStorage.setItem("token", data.token);
 
   const role = JSON.parse(atob(data.token.split(".")[1])).role;
-  setupUI(role);
+
+  authPage.style.display = "none";
+  app.style.display = "flex";
+  roleDisplay.innerText = role;
+
+  showSection("student");
 }
 
-// ---------- UI ----------
-function setupUI(role) {
-  auth.style.display = "none";
-  dashboard.style.display = "block";
-  roleDisplay.innerText = "Role: " + role;
-
-  if (role === "TEACHER") teacherSection.style.display = "block";
-  if (role === "HOD") {
-    teacherSection.style.display = "block";
-    hodSection.style.display = "block";
-  }
+function showSection(section) {
+  document.querySelectorAll(".section").forEach(s => s.classList.remove("active"));
+  document.getElementById(section + "-section").classList.add("active");
 }
 
-// ---------- DOC ----------
+function headers() {
+  return {
+    "Content-Type": "application/json",
+    "Authorization": "Bearer " + localStorage.getItem("token")
+  };
+}
+
 async function createDoc() {
   const res = await fetch(`${API}/documents`, {
     method: "POST",
     headers: headers(),
-    body: JSON.stringify({
-      title: docTitle.value,
-      content: docContent.value
-    }),
+    body: JSON.stringify({ title: docTitle.value, content: docContent.value }),
   });
-
-  alert("Created: " + (await res.json()).docId);
-}
-
-async function editDoc() {
-  const res = await fetch(`${API}/documents/${editId.value}/edit`, {
-    method: "POST",
-    headers: headers(),
-    body: JSON.stringify({ content: editContent.value }),
-  });
-
-  alert("Updated version: " + (await res.json()).version);
+  alert("Created");
 }
 
 async function getDocs() {
@@ -77,38 +78,26 @@ async function getDocs() {
   const docs = await res.json();
 
   docsList.innerHTML = "";
-  docs.forEach(d => {
-    docsList.innerHTML += `<li>${d.title} (${d.document_id})</li>`;
-  });
+  docs.forEach(d => docsList.innerHTML += `<li>${d.title}</li>`);
 }
 
-// ---------- VERSION ----------
-async function getVersions() {
-  const res = await fetch(
-    `${API}/documents/${versionDocId.value}/versions`,
-    { headers: headers() }
-  );
-
-  const versions = await res.json();
-
-  versionsList.innerHTML = "";
-  versions.forEach(v => {
-    versionsList.innerHTML += `<li>Version ${v.version_number}</li>`;
+async function editDoc() {
+  await fetch(`${API}/documents/${editId.value}/edit`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ content: editContent.value }),
   });
+  alert("Updated");
 }
 
-// ---------- AUDIT ----------
 async function getAudit() {
   const res = await fetch(`${API}/audit-logs`, { headers: headers() });
   const logs = await res.json();
 
-  auditList.innerHTML = "";
-  logs.forEach(l => {
-    auditList.innerHTML += `<li>${l.action}</li>`;
-  });
+  audit.innerHTML = "";
+  logs.forEach(l => audit.innerHTML += `<li>${l.action}</li>`);
 }
 
-// ---------- REPORT ----------
 async function generateReport() {
   const res = await fetch(`${API}/audit-logs`, { headers: headers() });
   const logs = await res.json();
@@ -116,22 +105,11 @@ async function generateReport() {
   const summary = {};
   logs.forEach(l => summary[l.action] = (summary[l.action] || 0) + 1);
 
-  new Chart(document.getElementById("chart"), {
+  new Chart(chart, {
     type: "bar",
     data: {
       labels: Object.keys(summary),
-      datasets: [{
-        label: "Actions",
-        data: Object.values(summary),
-      }]
+      datasets: [{ data: Object.values(summary) }]
     }
   });
-}
-
-// ---------- UTIL ----------
-function headers() {
-  return {
-    "Content-Type": "application/json",
-    "Authorization": "Bearer " + localStorage.getItem("token")
-  };
 }

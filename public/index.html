@@ -2,81 +2,89 @@
 <html>
 <head>
   <title>Audit Platform</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="/styles.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
+
 <body>
 
-<div class="container">
+<!-- AUTH -->
+<div id="auth-page">
+  <div class="auth-card">
 
-  <h1>📄 Audit Platform</h1>
+    <h1>Audit Platform</h1>
 
-  <!-- AUTH -->
-  <div id="auth" class="card">
-    <h2>Register</h2>
-    <input id="reg-name" placeholder="Name">
-    <input id="reg-email" placeholder="Email">
-    <input id="reg-password" type="password" placeholder="Password">
-
-    <select id="reg-role">
-      <option value="STUDENT">Student</option>
-      <option value="TEACHER">Teacher</option>
-      <option value="HOD">HOD</option>
-    </select>
-
-    <button onclick="register()">Register</button>
-
-    <hr>
-
-    <h2>Login</h2>
-    <input id="login-email" placeholder="Email">
-    <input id="login-password" type="password">
-    <button onclick="login()">Login</button>
-  </div>
-
-  <!-- DASHBOARD -->
-  <div id="dashboard" style="display:none">
-
-    <div class="header">
-      <h2 id="role-display"></h2>
+    <div class="tabs">
+      <button id="login-tab" class="active" onclick="switchTab('login')">Login</button>
+      <button id="register-tab" onclick="switchTab('register')">Register</button>
     </div>
 
-    <!-- STUDENT -->
-    <div id="student-section" class="grid">
+    <div id="login-form" class="form active">
+      <input id="login-email" placeholder="Email">
+      <input id="login-password" type="password" placeholder="Password">
+      <button onclick="login()">Login</button>
+    </div>
+
+    <div id="register-form" class="form">
+      <input id="reg-name" placeholder="Name">
+      <input id="reg-email" placeholder="Email">
+      <input id="reg-password" type="password" placeholder="Password">
+      <select id="reg-role">
+        <option value="STUDENT">Student</option>
+        <option value="TEACHER">Teacher</option>
+        <option value="HOD">HOD</option>
+      </select>
+      <button onclick="register()">Create Account</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app" style="display:none">
+
+  <div class="sidebar">
+    <h2>Audit</h2>
+    <p id="role-display"></p>
+
+    <button onclick="showSection('student')">Documents</button>
+    <button onclick="showSection('teacher')">Audit Logs</button>
+    <button onclick="showSection('hod')">Reports</button>
+  </div>
+
+  <div class="main">
+
+    <div id="student-section" class="section active">
+      <h2>Documents</h2>
 
       <div class="card">
-        <h3>Create Document</h3>
         <input id="doc-title" placeholder="Title">
         <textarea id="doc-content"></textarea>
         <button onclick="createDoc()">Create</button>
       </div>
 
       <div class="card">
-        <h3>Your Documents</h3>
-        <button onclick="getDocs()">Load</button>
+        <button onclick="getDocs()">Load Docs</button>
         <ul id="docs"></ul>
       </div>
 
       <div class="card">
-        <h3>Edit Document</h3>
         <input id="edit-id" placeholder="Doc ID">
         <textarea id="edit-content"></textarea>
         <button onclick="editDoc()">Update</button>
       </div>
-
     </div>
 
-    <!-- TEACHER -->
-    <div id="teacher-section" class="card" style="display:none">
-      <h3>Audit Logs</h3>
-      <button onclick="getAudit()">Load Logs</button>
+    <div id="teacher-section" class="section">
+      <h2>Audit Logs</h2>
+      <button onclick="getAudit()">Load</button>
       <ul id="audit"></ul>
     </div>
 
-    <!-- HOD -->
-    <div id="hod-section" class="card" style="display:none">
-      <h3>Reports</h3>
-      <button onclick="generateReport()">Generate Report</button>
+    <div id="hod-section" class="section">
+      <h2>Reports</h2>
+      <button onclick="generateReport()">Generate</button>
       <canvas id="chart"></canvas>
     </div>
 
@@ -84,7 +92,7 @@
 
 </div>
 
-<script src="script.js"></script>
+<script src="/script.js"></script>
 
 </body>
 </html>
