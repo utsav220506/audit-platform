@@ -1,151 +1,54 @@
-# ⬛ AuditDoc — Audit-First Document Platform
+# Enterprise Intelligence Auditing Platform 🛡️📊
 
-> Immutable versioning · Full audit trail · Role-based access control
+[![Deployment](https://img.shields.io/badge/Deployed_on-Vercel-black?logo=vercel)](#)
+[![Database](https://img.shields.io/badge/Database-Supabase_PostgreSQL-3ECF8E?logo=supabase)](#)
+[![Backend](https://img.shields.io/badge/Backend-Node._Serverless-339933?logo=nodedotjs)](#)
+[![UI](https://img.shields.io/badge/UI-Glassmorphism_CSS-0ea5e9)](#)
 
----
+A high-performance, full-stack intelligence platform engineered for rigorous data tracking, strict role-based isolation (RBAC), and cryptographic document version control. Built specifically for complex educational or corporate environments where maintaining an immaculate audit trail is essential.
 
-## 🚀 Quick Start
+## ✨ Core Features
 
-```bash
-npm install
-npm start
-# → http://localhost:3001
-```
+### 🔐 Strict Role-Based Access Control (RBAC)
+The platform divides users into three isolated tiers, automatically configuring their UI constraints:
+* **Student (Author):** Isolated environment. Can only create, read, and strictly edit their own documents. Cannot access system logs.
+* **Teacher (Auditor):** Surveillance tier. Automatically granted Read-Only access to all student documents. Empowered to securely generate differential corrections. Has access to the Immutable Audit Stream.
+* **HOD (Administrator):** Deep Analytics tier. Retains universal Read-Only document access and commands the Intelligence Reporting Engine to dynamically visualize real-time tracking data across the entire institution.
 
-For hot-reload during development:
-```bash
-npm run dev    # requires nodemon
-```
+### 📜 Cryptographic Version Control (VCS)
+Every time a document is edited, the system **never destroys** the old draft. Instead, it natively implements internal versioning (e.g., `v1`, `v2`) locking each specific state to a unique `SHA-256` cryptographic hash. 
+* Integrated with a **Differential Analysis Engine** allowing Auditors to perform GitHub-style side-by-side code comparisons highlighting mathematically added or removed sentences.
 
----
+### 🕵️ Immutable Audit Trails
+Integrated event-triggers natively hook into the Postgres Database. Every single action—whether it is `VIEW_DOC`, `EDIT_DOC`, or `GENERATE_REPORT`—is secretly parsed, timestamped, and bound to the user's ID, guaranteeing an untamperable record of exactly "who" did "what" and "when".
 
-## 🏗 Stack
-
-| Layer     | Technology |
-|-----------|-----------|
-| Backend   | Node.js + Express |
-| Database  | SQLite via `better-sqlite3` |
-| Auth      | JWT (`jsonwebtoken`) + bcrypt |
-| Frontend  | React 18 (CDN) + Babel Standalone |
-| Styles    | Custom CSS (no framework) |
-
-> **Note**: Babel Standalone compiles JSX in the browser on first load (~1-2s). For production, replace with a Vite/CRA build.
+### 📈 Intelligence Reporting Engine
+The Head of Department (HOD) commands a dynamic Analytics Dashboard using `Chart.js`. The backend parses thousands of micro-logs to generate macro-level Doughnut Charts mapping system operational volume, while surgically indexing specific student tracking metrics (e.g., verifying if a Teacher has fully *Audited* a Student's specific workloads).
 
 ---
 
-## 👥 Roles
+## 💻 Technical Architecture
 
-| Action            | STUDENT   | TEACHER | HOD |
-|-------------------|-----------|---------|-----|
-| Create Document   | ✅        | ✅      | ❌  |
-| Edit Document     | Own only  | All     | ❌  |
-| View Documents    | Own only  | All     | All |
-| Generate Reports  | ❌        | ✅      | ✅  |
-| Share/Export      | ❌        | ✅      | ✅  |
-| View Audit Logs   | ❌        | ✅      | ✅  |
+* **Frontend:** Ultra-modern Vanilla JS + ES6 Classes, built on top of a dynamic CSS Glassmorphism design system for a premium aesthetic interface.
+* **Backend:** `Express.js` engineered entirely for Edge-compatible **Vercel Serverless Functions** (`api/index.js`), eliminating idle server costs.
+* **Database:** `PostgreSQL` powered by **Supabase Connection Poolers**. Features normalized relational architecture tracking Users, Documents, Version SHAs, and System Audit Logs tightly.
 
----
+## 🚀 Setup & Execution
 
-## 📐 Architecture
-
-```
-User Action
-    ↓
-Express API  (server.js)
-    ↓
-Role Validation
-    ↓
-SQLite (better-sqlite3)  ← INSERT only, no UPDATE on versions
-    ↓
-Audit Log (every action)
-    ↓
-JSON Response → React SPA
-```
-
----
-
-## 🔒 Critical Constraints (from PRD §4)
-
-- **No hard deletes** — zero DELETE operations in the codebase
-- **No overwrites** — `DocumentVersion` rows are INSERT-only; the schema has no UPDATE paths
-- **Every action logged** — `CREATE_DOC`, `EDIT_DOC`, `VIEW_DOC`, `GENERATE_REPORT`, `SHARE_DATA`
-- **Role enforcement on every API endpoint** — via `auth` + `requireRole` middleware
-- **Password hashing** — bcrypt with 12 rounds
-
----
-
-## 🗄 Database Schema
-
+### 1. Database Initialization (Supabase)
+Run the core SQL schema in your Supabase SQL Editor:
 ```sql
-users              — user_id, name, email, password_hash, role, created_at
-documents          — document_id, title, created_by, created_at
-document_versions  — version_id, document_id, content, timestamp,
-                     created_by, hash (SHA-256), version_number
-audit_logs         — log_id, action, user_id, resource_id,
-                     resource_type, timestamp, metadata JSON
-reports            — report_id, type, generated_by, timestamp, data JSON
-share_logs         — share_id, shared_by, shared_to, document_id, timestamp
+CREATE TABLE IF NOT EXISTS users ( user_id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, role TEXT, created_at TIMESTAMP DEFAULT NOW());
+CREATE TABLE IF NOT EXISTS documents ( document_id TEXT PRIMARY KEY, title TEXT NOT NULL, created_by TEXT, created_at TIMESTAMP DEFAULT NOW());
+CREATE TABLE IF NOT EXISTS document_versions ( version_id TEXT PRIMARY KEY, document_id TEXT, content TEXT, timestamp TIMESTAMP DEFAULT NOW(), created_by TEXT, hash TEXT, version_number INTEGER );
+CREATE TABLE IF NOT EXISTS audit_logs ( log_id TEXT PRIMARY KEY, action TEXT, user_id TEXT, resource_id TEXT, resource_type TEXT, timestamp TIMESTAMP DEFAULT NOW(), metadata TEXT DEFAULT '{}');
+CREATE TABLE IF NOT EXISTS reports ( report_id TEXT PRIMARY KEY, type TEXT NOT NULL, generated_by TEXT NOT NULL REFERENCES users(user_id), timestamp TIMESTAMP DEFAULT NOW(), data TEXT );
 ```
 
----
+### 2. Vercel Configuration
+Define the following securely under **Environment Variables**:
+* `DATABASE_URL`: Your Supabase Postgres pooler string.
+* `JWT_SECRET`: Your secure signature key.
 
-## 🌐 API Endpoints
-
-```
-POST /auth/register            Register (name, email, password, role)
-POST /auth/login               Login → JWT
-
-POST /documents                Create document (STUDENT, TEACHER)
-GET  /documents                List documents (role-filtered)
-GET  /documents/:id            Get document + latest version
-POST /documents/:id/edit       Create new version (NEVER overwrites)
-GET  /documents/:id/versions   All versions ordered DESC
-GET  /documents/:id/compare    Diff ?v1=N&v2=M (LCS diff)
-
-POST /reports/generate         Generate full report (TEACHER, HOD)
-GET  /reports                  List reports
-GET  /reports/:id              Get report data
-
-POST /share                    Log a share event (TEACHER, HOD)
-GET  /audit-logs               Paginated audit log (TEACHER, HOD)
-GET  /users                    User list (for sharing UI)
-```
-
----
-
-## 🖼 Pages
-
-| Page            | Access      | Description |
-|----------------|-------------|-------------|
-| Dashboard       | All roles   | Document list, stats, search |
-| Document Editor | STUDENT, TEACHER | Write, save versions, view history, compare diff |
-| Reports         | TEACHER, HOD | Generate & view JSON reports |
-| Audit Logs      | TEACHER, HOD | Filterable full audit trail table |
-
----
-
-## 📦 Edge Cases Handled (PRD §9)
-
-- **Empty document edits** — allowed; creates a valid empty-content version
-- **Concurrent edits** — each request reads the latest `version_number` and increments atomically via SQLite transactions
-- **Unauthorized access** — 401 (no token) / 403 (wrong role) with descriptive errors
-- **Missing versions in diff** — 404 with specific version number in error message
-- **Large documents** — Express body limit set to 10 MB
-
----
-
-## 🎨 UI Design Notes
-
-- **Font stack**: Playfair Display (headers) · IBM Plex Mono (hashes/versions) · DM Sans (body)
-- **Theme**: Dark archival aesthetic — slate background, amber accent, teal version badges
-- **Diff view**: LCS-based line diff with green/red highlighting
-- **Version history**: Timeline view with SHA-256 hash fingerprints
-
----
-
-## 🔧 Environment Variables
-
-```bash
-PORT=3001              # default 3001
-JWT_SECRET=your-secret # default: hardcoded dev value (change in production!)
-```
+### 3. Deployment
+The web app naturally deploys by pushing standard HTML/CSS/JS into the `/public` root, mapping the serverless database interface directly through `/api/*` inside `vercel.json`.
