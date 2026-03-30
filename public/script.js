@@ -128,6 +128,16 @@ class AuditPlatformApp {
     this.user = null;
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    
+    // UI Data Cleanup to prevent leaks between sessions
+    document.getElementById('doc-title').value = '';
+    document.getElementById('doc-content').value = '';
+    document.getElementById('edit-id').value = '';
+    document.getElementById('edit-content').value = '';
+    document.getElementById('edit-pane').style.opacity = '0.5';
+    document.getElementById('edit-pane').style.pointerEvents = 'none';
+    document.getElementById('doc-modal').style.display = 'none';
+
     document.getElementById('app-dashboard').style.display = 'none';
     document.getElementById('auth-page').style.display = 'flex';
   }
@@ -220,21 +230,44 @@ class AuditPlatformApp {
         data.forEach(doc => {
           const modDate = doc.last_modified ? new Date(doc.last_modified).toLocaleString() : new Date(doc.created_at).toLocaleString();
           const tr = document.createElement('tr');
+          const safeTitle = doc.title.replace(/'/g, "\\'");
           tr.innerHTML = `
             <td><strong>${doc.title}</strong></td>
             <td>${doc.author}</td>
             <td>v${doc.latest_version || 1}</td>
             <td class="text-subtle">${modDate}</td>
-            <td>
-              <button class="secondary-btn" onclick="app.loadDocument('${doc.document_id}')">
-                ${this.user.role === 'STUDENT' ? 'View / Edit' : 'View'}
+            <td style="display: flex; gap: 8px;">
+              <button class="secondary-btn" title="Read Full Screen" onclick="app.viewDocument('${safeTitle}', '${doc.document_id}')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
               </button>
+              ${this.user.role === 'STUDENT' ? `
+                <button class="secondary-btn" title="Load into Editor" onclick="app.loadDocument('${doc.document_id}')">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                </button>
+              ` : ''}
             </td>
           `;
           tbody.appendChild(tr);
         });
       }
     } catch (e) {
+      this.showToast(e.message, 'error');
+    }
+  }
+
+  async viewDocument(title, docId) {
+    try {
+      this.showToast('Pulling document from secure storage...', 'success');
+      const res = await fetch(`${API}/documents/${docId}`, { headers: this.headers() });
+      const data = await res.json();
+      
+      if (!res.ok) throw new Error(data.error);
+
+      document.getElementById('modal-title').innerText = title + ` (v${data.latestVersion.version_number})`;
+      document.getElementById('modal-text').innerText = data.latestVersion.content;
+      document.getElementById('doc-modal').style.display = 'flex';
+      
+    } catch(e) {
       this.showToast(e.message, 'error');
     }
   }
