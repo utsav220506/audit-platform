@@ -1,4 +1,3 @@
-const serverless = require('serverless-http');
 const express = require('express');
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
@@ -273,4 +272,4 @@ app.use('/api', apiRouter);
 // Fallback in case Vercel rewrites it
 app.use('/', apiRouter);
 
-module.exports = serverless(app);
+module.exports = app;
